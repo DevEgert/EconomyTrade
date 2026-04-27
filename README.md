@@ -2,6 +2,9 @@
 
 Player-to-player trading for Minecraft Forge 1.20.1. The mod is intended to run alongside the [Specialized Economy](https://github.com/DevEgert/specialized-economy) KubeJS profession scripts.
 
+## Why I built this
+The main economy system depended on player trading, but existing solutions didn’t support the restrictions and flow I needed. I built a separate mod to handle secure real-time trading between players.
+
 ## Current State
 
 The mod builds and has the core trading flow implemented. In-game testing and balance work are still ongoing.
