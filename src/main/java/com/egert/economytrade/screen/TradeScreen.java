@@ -84,11 +84,11 @@ public class TradeScreen extends Screen {
         int btnY = invSlotY + 4 * (SLOT_SIZE + GAP) + 4;
 
         confirmButton = Button.builder(
-                Component.literal("✔ Confirm"), btn -> onConfirm()
+                Component.literal("Confirm"), btn -> onConfirm()
         ).pos(px + 8, btnY).size((POPUP_W / 2) - 12, 18).build();
 
         cancelButton = Button.builder(
-                Component.literal("✖ Cancel"), btn -> onCancel()
+                Component.literal("Cancel"), btn -> onCancel()
         ).pos(px + POPUP_W / 2 + 4, btnY).size((POPUP_W / 2) - 12, 18).build();
 
         addRenderableWidget(confirmButton);
@@ -116,7 +116,7 @@ public class TradeScreen extends Screen {
                 px + POPUP_W - 4, invPY - 2, 0xFF555566);
 
         // Title
-        g.drawCenteredString(font, "⚖ Economy Trade ⚖",
+        g.drawCenteredString(font, "Economy Trade",
                 px + POPUP_W / 2, py + 7, 0xFFFFD700);
 
         // Your name badge
@@ -139,11 +139,11 @@ public class TradeScreen extends Screen {
 
         // Ready indicators
         if (myConfirmed) {
-            g.drawString(font, "§a✔ Ready",
+            g.drawString(font, "§aReady",
                     mySlotX, invPY - 12, 0xFFFFFFFF);
         }
         if (theirConfirmed) {
-            g.drawString(font, "§a✔ Ready",
+            g.drawString(font, "§aReady",
                     theirSlotX, invPY - 12, 0xFFFFFFFF);
         }
 
@@ -400,8 +400,8 @@ public class TradeScreen extends Screen {
     private void updateConfirmButton() {
         if (confirmButton != null) {
             confirmButton.setMessage(myConfirmed
-                    ? Component.literal("§a✔ Confirmed!")
-                    : Component.literal("✔ Confirm"));
+                    ? Component.literal("§aConfirmed")
+                    : Component.literal("Confirm"));
         }
     }
 
