@@ -1,0 +1,24 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[mods]]
+modId="economytrade"
+version="1.0.0"
+displayName="Economy Trade"
+authors="DevEgert"
+description='''A player-to-player trade UI for Specialized Economy Survival.'''
+
+[[dependencies.economytrade]]
+modId="forge"
+mandatory=true
+versionRange="[47,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.economytrade]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.21)"
+ordering="NONE"
+side="BOTH"
