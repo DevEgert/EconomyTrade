@@ -20,6 +20,7 @@ public class TradeHandler {
     private static final int TRADE_COOLDOWN_TICKS = 600; // 30 seconds
     private static final int REQUEST_TIMEOUT_TICKS = 600; // 30 seconds
     private static final int CONFIRM_COUNTDOWN_TICKS = 60; // 3 seconds
+    private static final int MAX_TRADE_SLOTS = 12;
 
     public static class TradeSession {
         public UUID playerA;
@@ -111,7 +112,7 @@ public class TradeHandler {
         if (session == null) return;
 
         if (session.isPlayerA(playerUUID)) {
-            session.offeredByA = new ArrayList<>(items);
+            session.offeredByA = sanitizeOffer(items);
             if (session.confirmedA) {
                 session.confirmedA = false;
                 session.confirmedB = false;
@@ -119,7 +120,7 @@ public class TradeHandler {
                 session.countdownTimer = 0;
             }
         } else {
-            session.offeredByB = new ArrayList<>(items);
+            session.offeredByB = sanitizeOffer(items);
             if (session.confirmedB) {
                 session.confirmedA = false;
                 session.confirmedB = false;
@@ -144,18 +145,44 @@ public class TradeHandler {
         return false;
     }
 
-    public static void executeTrade(ServerPlayer playerA, ServerPlayer playerB,
-                                    TradeSession session) {
-        for (ItemStack stack : session.offeredByA) {
-            if (!playerB.getInventory().add(stack)) playerB.drop(stack, false);
+    public static boolean executeTrade(ServerPlayer playerA, ServerPlayer playerB,
+                                       TradeSession session) {
+        List<ItemStack> offerA = sanitizeOffer(session.offeredByA);
+        List<ItemStack> offerB = sanitizeOffer(session.offeredByB);
+        boolean countsForProgress = !offerA.isEmpty() && !offerB.isEmpty();
+
+        if (!hasItems(playerA, offerA) || !hasItems(playerB, offerB)) {
+            playerA.sendSystemMessage(Component.literal(
+                    "§cTrade cancelled: offered items are no longer available."));
+            playerB.sendSystemMessage(Component.literal(
+                    "§cTrade cancelled: offered items are no longer available."));
+            cooldowns.put(playerA.getUUID(), 100);
+            cooldowns.put(playerB.getUUID(), 100);
+            sessions.remove(playerA.getUUID());
+            sessions.remove(playerB.getUUID());
+            return false;
         }
-        for (ItemStack stack : session.offeredByB) {
-            if (!playerA.getInventory().add(stack)) playerA.drop(stack, false);
+
+        removeItems(playerA, offerA);
+        removeItems(playerB, offerB);
+
+        for (ItemStack stack : offerA) {
+            ItemStack copy = stack.copy();
+            if (!playerB.getInventory().add(copy)) playerB.drop(copy, false);
+        }
+        for (ItemStack stack : offerB) {
+            ItemStack copy = stack.copy();
+            if (!playerA.getInventory().add(copy)) playerA.drop(copy, false);
         }
         cooldowns.put(playerA.getUUID(), TRADE_COOLDOWN_TICKS);
         cooldowns.put(playerB.getUUID(), TRADE_COOLDOWN_TICKS);
+        if (countsForProgress) {
+            incrementTradeCounts(playerA);
+            incrementTradeCounts(playerB);
+        }
         sessions.remove(playerA.getUUID());
         sessions.remove(playerB.getUUID());
+        return true;
     }
 
     @SubscribeEvent
@@ -245,7 +272,19 @@ public class TradeHandler {
                 cancelAndNotify(session, event);
                 continue;
             }
-            executeTrade(pA, pB, session);
+            if (!executeTrade(pA, pB, session)) {
+                NetworkHandler.CHANNEL.send(
+                        net.minecraftforge.network.PacketDistributor
+                                .PLAYER.with(() -> pA),
+                        new TradePacket(TradePacket.Action.CANCEL, "INVALID_ITEMS")
+                );
+                NetworkHandler.CHANNEL.send(
+                        net.minecraftforge.network.PacketDistributor
+                                .PLAYER.with(() -> pB),
+                        new TradePacket(TradePacket.Action.CANCEL, "INVALID_ITEMS")
+                );
+                continue;
+            }
             NetworkHandler.CHANNEL.send(
                     net.minecraftforge.network.PacketDistributor
                             .PLAYER.with(() -> pA),
@@ -261,6 +300,73 @@ public class TradeHandler {
         // Cancel timed out trades
         for (TradeSession session : toCancel) {
             cancelAndNotify(session, event);
+        }
+    }
+
+    private static List<ItemStack> sanitizeOffer(List<ItemStack> items) {
+        List<ItemStack> sanitized = new ArrayList<>();
+        if (items == null) return sanitized;
+
+        for (ItemStack stack : items) {
+            if (sanitized.size() >= MAX_TRADE_SLOTS) break;
+            if (stack == null || stack.isEmpty()) continue;
+
+            ItemStack copy = stack.copy();
+            int maxCount = Math.min(copy.getMaxStackSize(), 64);
+            if (copy.getCount() > maxCount) copy.setCount(maxCount);
+            if (copy.getCount() > 0) sanitized.add(copy);
+        }
+        return sanitized;
+    }
+
+    private static boolean hasItems(ServerPlayer player, List<ItemStack> offered) {
+        List<ItemStack> inventory = new ArrayList<>();
+        for (ItemStack stack : player.getInventory().items) {
+            inventory.add(stack.copy());
+        }
+
+        for (ItemStack needed : offered) {
+            int remaining = needed.getCount();
+            for (ItemStack available : inventory) {
+                if (!ItemStack.isSameItemSameTags(available, needed)) continue;
+                int taken = Math.min(remaining, available.getCount());
+                available.shrink(taken);
+                remaining -= taken;
+                if (remaining <= 0) break;
+            }
+            if (remaining > 0) return false;
+        }
+        return true;
+    }
+
+    private static void removeItems(ServerPlayer player, List<ItemStack> offered) {
+        for (ItemStack needed : offered) {
+            int remaining = needed.getCount();
+            for (int i = 0; i < player.getInventory().items.size(); i++) {
+                ItemStack available = player.getInventory().items.get(i);
+                if (!ItemStack.isSameItemSameTags(available, needed)) continue;
+
+                int taken = Math.min(remaining, available.getCount());
+                available.shrink(taken);
+                if (available.isEmpty()) {
+                    player.getInventory().items.set(i, ItemStack.EMPTY);
+                }
+                remaining -= taken;
+                if (remaining <= 0) break;
+            }
+        }
+        player.getInventory().setChanged();
+    }
+
+    private static void incrementTradeCounts(ServerPlayer player) {
+        var data = player.getPersistentData();
+        data.putInt("trade_count", data.getInt("trade_count") + 1);
+
+        if (data.contains("player_role_2") && !data.getString("player_role_2").isEmpty()) {
+            data.putInt("trade_count_2", data.getInt("trade_count_2") + 1);
+        }
+        if (data.contains("player_role_3") && !data.getString("player_role_3").isEmpty()) {
+            data.putInt("trade_count_3", data.getInt("trade_count_3") + 1);
         }
     }
 

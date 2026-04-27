@@ -31,7 +31,8 @@ public class ClientPacketHandler {
                     }
                 }
                 case COMPLETE -> {
-                    if (mc.screen instanceof TradeScreen) {
+                    if (mc.screen instanceof TradeScreen ts) {
+                        ts.markCompleted();
                         mc.setScreen(null);
                     }
                     mc.player.sendSystemMessage(

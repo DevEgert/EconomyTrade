@@ -31,6 +31,7 @@ public class TradeScreen extends Screen {
 
     private boolean myConfirmed = false;
     private boolean theirConfirmed = false;
+    private boolean completed = false;
     private ItemStack heldStack = ItemStack.EMPTY;
 
     private Button confirmButton;
@@ -414,12 +415,17 @@ public class TradeScreen extends Screen {
         this.theirConfirmed = confirmed;
     }
 
+    public void markCompleted() {
+        this.completed = true;
+    }
+
     @Override
     public boolean isPauseScreen() { return false; }
 
     @Override
     public void onClose() {
         super.onClose();
+        if (completed) return;
         if (!heldStack.isEmpty()) {
             returnToInventory(heldStack);
             heldStack = ItemStack.EMPTY;
